@@ -80,6 +80,7 @@ func (c *channelPool) Get() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
+		conns <- conn
 
 		return c.wrapConn(conn), nil
 	}
