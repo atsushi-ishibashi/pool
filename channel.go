@@ -93,7 +93,7 @@ func (c *channelPool) Get() (net.Conn, error) {
 
 func (c *channelPool) supply() {
 	curSize := c.Len()
-	for curSize < c.minSize {
+	for curSize < c.minSize+10 {
 		conn, err := c.factory()
 		if err != nil {
 			continue
