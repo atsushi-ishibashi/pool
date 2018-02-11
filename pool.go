@@ -18,6 +18,7 @@ type Pool interface {
 	// it back to the Pool. Closing it when the pool is destroyed or full will
 	// be counted as an error.
 	Get() (net.Conn, error)
+	Supply(int) error
 
 	// Close closes the pool and all its connections. After Close() the pool is
 	// no longer usable.

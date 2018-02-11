@@ -10,9 +10,8 @@ import (
 // channelPool implements the Pool interface based on buffered channels.
 type channelPool struct {
 	// storage for our net.Conn connections
-	mu      sync.Mutex
-	conns   chan net.Conn
-	minSize int
+	mu    sync.Mutex
+	conns chan net.Conn
 
 	// net.Conn generator
 	factory Factory
@@ -27,7 +26,7 @@ type Factory func() (net.Conn, error)
 // until a new Get() is called. During a Get(), If there is no new connection
 // available in the pool, a new connection will be created via the Factory()
 // method.
-func NewChannelPool(initialCap, maxCap, min int, factory Factory) (Pool, error) {
+func NewChannelPool(initialCap, maxCap int, factory Factory) (Pool, error) {
 	if initialCap < 0 || maxCap <= 0 || initialCap > maxCap {
 		return nil, errors.New("invalid capacity settings")
 	}
@@ -35,7 +34,6 @@ func NewChannelPool(initialCap, maxCap, min int, factory Factory) (Pool, error) 
 	c := &channelPool{
 		conns:   make(chan net.Conn, maxCap),
 		factory: factory,
-		minSize: min,
 	}
 
 	// create initial connections, if something goes wrong,
@@ -75,9 +73,6 @@ func (c *channelPool) Get() (net.Conn, error) {
 		if conn == nil {
 			return nil, ErrClosed
 		}
-		if len(conns) < c.minSize {
-			go c.supply()
-		}
 
 		return c.wrapConn(conn), nil
 	default:
@@ -85,22 +80,29 @@ func (c *channelPool) Get() (net.Conn, error) {
 		if err != nil {
 			return nil, err
 		}
-		conns <- conn
 
 		return c.wrapConn(conn), nil
 	}
 }
 
-func (c *channelPool) supply() {
-	curSize := c.Len()
-	for curSize < c.minSize+10 {
+func (c *channelPool) Supply(requireConnNum int) error {
+	chanCap := cap(c.conns)
+	l := c.Len()
+	if chanCap < requireConnNum {
+		requireConnNum = chanCap
+	}
+	if l >= requireConnNum {
+		return nil
+	}
+	for i := l; i < requireConnNum; i++ {
 		conn, err := c.factory()
 		if err != nil {
-			continue
+			c.Close()
+			return fmt.Errorf("factory is not able to fill the pool: %s", err)
 		}
 		c.conns <- conn
-		curSize++
 	}
+	return nil
 }
 
 // put puts the connection back to the pool. If the pool is full or closed,
